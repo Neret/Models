@@ -13,7 +13,9 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
 @Configuration
@@ -22,7 +24,7 @@ public class CustomJwtEncoder {
     @Bean
     public JWKSet gJwkSet() throws NoSuchAlgorithmException {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        generator.genKeyPair();
+        generator.initialize(2048);
         KeyPair pair = generator.genKeyPair();
         JWK jwk = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
             .privateKey((RSAPrivateKey) pair.getPrivate())
@@ -31,8 +33,14 @@ public class CustomJwtEncoder {
     }
 
     @Bean
-    public JwtEncoder jEncoder() throws NoSuchAlgorithmException {
-        JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(gJwkSet());
+    public JwtEncoder jEncoder(JWKSet jwkSet) {
+        JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(jwkSet);
         return new NimbusJwtEncoder(jwks);
+    }
+
+    @Bean
+    public JwtDecoder jDecoder(JWKSet jwkSet) throws Exception {
+        RSAKey rsaKey = (RSAKey) jwkSet.getKeys().get(0);
+        return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build();
     }
 }

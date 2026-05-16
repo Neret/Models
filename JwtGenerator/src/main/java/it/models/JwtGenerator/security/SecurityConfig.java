@@ -2,6 +2,7 @@ package it.models.JwtGenerator.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,8 +23,15 @@ public class SecurityConfig {
                             SessionCreationPolicy.STATELESS
                         )
                     )
+                    .oauth2ResourceServer(oauth2 ->
+                        oauth2.jwt(Customizer.withDefaults())
+                    )
                     .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/jwt/**").permitAll()
+                        auth
+                            .requestMatchers("/api/jwt/**")
+                            .permitAll()
+                            .anyRequest()
+                            .authenticated()
                     )
             )
             .build();

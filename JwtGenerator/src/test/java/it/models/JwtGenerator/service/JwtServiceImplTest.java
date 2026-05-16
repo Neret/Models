@@ -49,11 +49,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("Generate Token - Success for User Role")
     void generateToken_UserRole_Success() {
-        UserProfile request = new UserProfile(
-            "test@gmail.com",
-            "Test",
-            List.of("USER")
-        );
+        UserProfile request = new UserProfile(1L, List.of("USER"));
         Token token = service.generateToken(request);
 
         verify(jwtRepository).save(entityCaptor.capture());
@@ -67,11 +63,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("Generate Token - Success for Admin Role")
     void generateToken_AdminRole_Success() {
-        UserProfile request = new UserProfile(
-            "admin@gmail.com",
-            "Admin",
-            List.of("ADMIN")
-        );
+        UserProfile request = new UserProfile(1L, List.of("ADMIN"));
         Token token = service.generateToken(request);
 
         verify(jwtRepository).save(entityCaptor.capture());
@@ -85,7 +77,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("Generate Token - Fails when Roles are null")
     void generateToken_NullRoles_ThrowsException() {
-        UserProfile request = new UserProfile("test@gmail.com", "Test", null);
+        UserProfile request = new UserProfile(1L, null);
         assertThrows(IllegalArgumentException.class, () ->
             service.generateToken(request)
         );
@@ -199,6 +191,7 @@ class JwtServiceImplTest {
         JwtEntity entity = new JwtEntity();
         entity.setId(100L);
         entity.setAccessExpiredAt(Instant.now().plusSeconds(60));
+        entity.setRoles(List.of("USER")); // Corretto: previene il NullPointerException in String.join()
 
         when(jwtRepository.findByAccessToken("validAccess")).thenReturn(
             Optional.of(entity)

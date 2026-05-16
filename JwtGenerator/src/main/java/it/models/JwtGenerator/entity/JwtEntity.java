@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "db_token")
@@ -15,6 +16,9 @@ public class JwtEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
+
+    @Column(name = "user_id", nullable = false, unique = true)
+    private long userId;
 
     @Column(name = "access_token", nullable = false, unique = true)
     private String accessToken;
@@ -31,12 +35,23 @@ public class JwtEntity {
     @Column(name = "refresh_expired_at", nullable = false)
     private Instant refreshExpiredAt;
 
+    @Column(name = "roles", nullable = false)
+    private List<String> roles;
+
     public long getId() {
         return id;
     }
 
     public void setId(long id) {
         this.id = id;
+    }
+
+    public long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(long userId) {
+        this.userId = userId;
     }
 
     public String getAccessToken() {
@@ -77,5 +92,13 @@ public class JwtEntity {
 
     public void setRefreshExpiredAt(Instant refreshExpiredAt) {
         this.refreshExpiredAt = refreshExpiredAt;
+    }
+
+    public List<String> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<String> roles) {
+        this.roles = roles;
     }
 }

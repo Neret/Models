@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -25,9 +24,9 @@ public class JwtGeneratorControllerImpl implements JwtGeneratorController {
     @PostMapping("/generate")
     @Override
     public ResponseEntity<Token> generateToken(
-        @RequestBody UserProfile jsonRequest
+        @RequestBody UserProfile userProfile
     ) {
-        return ResponseEntity.ok(jwtService.generateToken(jsonRequest));
+        return ResponseEntity.ok(jwtService.generateToken(userProfile));
     }
 
     @PostMapping("/refresh")
@@ -44,7 +43,7 @@ public class JwtGeneratorControllerImpl implements JwtGeneratorController {
 
     @PostMapping("/logout")
     @Override
-    public ResponseEntity<Void> logout(@RequestParam String refreshToken) {
+    public ResponseEntity<Void> logout(@RequestBody String refreshToken) {
         jwtService.revokeToken(refreshToken);
         return ResponseEntity.ok().build();
     }

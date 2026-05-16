@@ -45,8 +45,8 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public Token generateToken(UserProfile jsonRequest) {
-        if (jsonRequest == null || jsonRequest.roles() == null) {
+    public Token generateToken(UserProfile userProfile) {
+        if (userProfile == null || userProfile.roles() == null) {
             throw new IllegalArgumentException(
                 "Invalid UserProfile parameters"
             );
@@ -58,9 +58,11 @@ public class JwtServiceImpl implements JwtService {
         JwtEntity entity = new JwtEntity();
         entity.setAccessToken(opaqueAccess);
         entity.setRefreshToken(opaqueRefresh);
+        entity.setUserId(userProfile.id());
         entity.setEmittedAt(Instant.now());
         entity.setAccessExpiredAt(Instant.now().plus(15, ChronoUnit.MINUTES));
         entity.setRefreshExpiredAt(Instant.now().plus(7, ChronoUnit.DAYS));
+        entity.setRoles(userProfile.roles());
 
         jwtRepository.save(entity);
 
@@ -135,7 +137,8 @@ public class JwtServiceImpl implements JwtService {
             .issuer("token-service")
             .issuedAt(Instant.now())
             .expiresAt(entity.getAccessExpiredAt())
-            .subject(String.valueOf(entity.getId()))
+            .subject(String.valueOf(entity.getUserId()))
+            .claim("scope", String.join(" ", entity.getRoles()))
             .build();
 
         return jwtEncoder
