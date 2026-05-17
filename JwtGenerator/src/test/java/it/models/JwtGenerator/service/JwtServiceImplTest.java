@@ -1,11 +1,11 @@
 package it.models.JwtGenerator.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,12 +52,12 @@ class JwtServiceImplTest {
         UserProfile request = new UserProfile(1L, List.of("USER"));
         Token token = service.generateToken(request);
 
-        verify(jwtRepository).save(entityCaptor.capture());
+        verify(jwtRepository, times(1)).save(entityCaptor.capture());
         JwtEntity savedEntity = entityCaptor.getValue();
 
-        assertNotNull(token);
-        assertNotNull(savedEntity.getAccessToken());
-        assertNotNull(savedEntity.getRefreshToken());
+        assertThat(token).isNotNull();
+        assertThat(savedEntity.getAccessToken()).isNotNull();
+        assertThat(savedEntity.getRefreshToken()).isNotNull();
     }
 
     @Test
@@ -66,30 +66,33 @@ class JwtServiceImplTest {
         UserProfile request = new UserProfile(1L, List.of("ADMIN"));
         Token token = service.generateToken(request);
 
-        verify(jwtRepository).save(entityCaptor.capture());
+        verify(jwtRepository, times(1)).save(entityCaptor.capture());
         JwtEntity savedEntity = entityCaptor.getValue();
 
-        assertNotNull(token);
-        assertNotNull(savedEntity.getAccessToken());
-        assertNotNull(savedEntity.getRefreshToken());
+        assertThat(token).isNotNull();
+        assertThat(savedEntity.getAccessToken()).isNotNull();
+        assertThat(savedEntity.getRefreshToken()).isNotNull();
     }
 
     @Test
     @DisplayName("Generate Token - Fails when Roles are null")
     void generateToken_NullRoles_ThrowsException() {
         UserProfile request = new UserProfile(1L, null);
-        assertThrows(IllegalArgumentException.class, () ->
-            service.generateToken(request)
+
+        assertThatThrownBy(() -> service.generateToken(request)).isInstanceOf(
+            IllegalArgumentException.class
         );
+
         verify(jwtRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("Generate Token - Fails when UserProfile is null")
     void generateToken_NullProfile_ThrowsException() {
-        assertThrows(IllegalArgumentException.class, () ->
-            service.generateToken(null)
+        assertThatThrownBy(() -> service.generateToken(null)).isInstanceOf(
+            IllegalArgumentException.class
         );
+
         verify(jwtRepository, never()).save(any());
     }
 
@@ -104,32 +107,35 @@ class JwtServiceImplTest {
         entity.setAccessExpiredAt(Instant.now().minusSeconds(10));
         entity.setRefreshExpiredAt(Instant.now().plusSeconds(600));
 
-        when(jwtRepository.findByRefreshToken("validRefreshToken")).thenReturn(
-            Optional.of(entity)
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("oldAccessToken", "validRefreshToken")
+        ).thenReturn(Optional.of(entity));
 
         Token output = service.refreshToken(tokenInput);
 
-        verify(jwtRepository).save(entityCaptor.capture());
+        verify(jwtRepository, times(1)).save(entityCaptor.capture());
         JwtEntity savedEntity = entityCaptor.getValue();
 
-        assertNotNull(output);
-        assertNotNull(savedEntity.getAccessToken());
-        assertNotNull(savedEntity.getRefreshToken());
+        assertThat(output).isNotNull();
+        assertThat(savedEntity.getAccessToken()).isNotNull();
+        assertThat(savedEntity.getRefreshToken()).isNotNull();
     }
 
     @Test
     @DisplayName("Refresh Token - Fails when Token is invalid or empty")
     void refreshToken_InvalidToken_ThrowsException() {
-        assertThrows(IllegalArgumentException.class, () ->
-            service.refreshToken(null)
+        assertThatThrownBy(() -> service.refreshToken(null)).isInstanceOf(
+            IllegalArgumentException.class
         );
-        assertThrows(IllegalArgumentException.class, () ->
+
+        assertThatThrownBy(() ->
             service.refreshToken(new Token(null, "valid"))
-        );
-        assertThrows(IllegalArgumentException.class, () ->
+        ).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() ->
             service.refreshToken(new Token("valid", ""))
-        );
+        ).isInstanceOf(IllegalArgumentException.class);
+
         verify(jwtRepository, never()).save(any());
     }
 
@@ -138,12 +144,13 @@ class JwtServiceImplTest {
     void refreshToken_NotFound_ThrowsException() {
         Token tokenInput = new Token("oldAccessToken", "unknownRefreshToken");
         when(
-            jwtRepository.findByRefreshToken("unknownRefreshToken")
+            jwtRepository.findByAccessTokenAndRefreshToken("oldAccessToken", "unknownRefreshToken")
         ).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () ->
-            service.refreshToken(tokenInput)
+        assertThatThrownBy(() -> service.refreshToken(tokenInput)).isInstanceOf(
+            IllegalArgumentException.class
         );
+
         verify(jwtRepository, never()).save(any());
     }
 
@@ -155,13 +162,14 @@ class JwtServiceImplTest {
         entity.setRefreshExpiredAt(Instant.now().minusSeconds(5));
 
         when(
-            jwtRepository.findByRefreshToken("expiredRefreshToken")
+            jwtRepository.findByAccessTokenAndRefreshToken("oldAccessToken", "expiredRefreshToken")
         ).thenReturn(Optional.of(entity));
 
-        assertThrows(IllegalStateException.class, () ->
-            service.refreshToken(tokenInput)
+        assertThatThrownBy(() -> service.refreshToken(tokenInput)).isInstanceOf(
+            IllegalStateException.class
         );
-        verify(jwtRepository).delete(entity);
+
+        verify(jwtRepository, times(1)).delete(entity);
     }
 
     @Test
@@ -175,14 +183,18 @@ class JwtServiceImplTest {
         entity.setAccessToken("differentAccessToken");
         entity.setRefreshExpiredAt(Instant.now().plusSeconds(600));
 
-        when(jwtRepository.findByRefreshToken("validRefreshToken")).thenReturn(
-            Optional.of(entity)
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken(
+                "providedAccessToken",
+                "validRefreshToken"
+            )
+        ).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> service.refreshToken(tokenInput)).isInstanceOf(
+            IllegalArgumentException.class
         );
 
-        assertThrows(IllegalArgumentException.class, () ->
-            service.refreshToken(tokenInput)
-        );
-        verify(jwtRepository).delete(entity);
+        verify(jwtRepository, times(1)).delete(entity);
     }
 
     @Test
@@ -191,30 +203,35 @@ class JwtServiceImplTest {
         JwtEntity entity = new JwtEntity();
         entity.setId(100L);
         entity.setAccessExpiredAt(Instant.now().plusSeconds(60));
-        entity.setRoles(List.of("USER")); // Corretto: previene il NullPointerException in String.join()
+        entity.setRoles("ROLE_USER");
 
-        when(jwtRepository.findByAccessToken("validAccess")).thenReturn(
-            Optional.of(entity)
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("validAccess", "validRefresh")
+        ).thenReturn(Optional.of(entity));
 
         Jwt mockJwt = mock(Jwt.class);
         when(mockJwt.getTokenValue()).thenReturn("header.payload.signature");
         when(encoder.encode(any())).thenReturn(mockJwt);
 
-        String output = service.introspectToJwt("validAccess");
+        String output = service.introspectToJwt(
+            new Token("validAccess", "validRefresh")
+        );
 
-        assertEquals("header.payload.signature", output);
+        assertThat(output).isEqualTo("header.payload.signature");
     }
 
     @Test
     @DisplayName("Introspect to JWT - Fails when Token not found")
     void introspectToJwt_NotFound_ThrowsException() {
-        when(jwtRepository.findByAccessToken("unknownAccess")).thenReturn(
-            Optional.empty()
-        );
-        assertThrows(IllegalArgumentException.class, () ->
-            service.introspectToJwt("unknownAccess")
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("unknownAccess", "unknownRefresh")
+        ).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+            service.introspectToJwt(
+                new Token("unknownAccess", "unknownRefresh")
+            )
+        ).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -223,45 +240,51 @@ class JwtServiceImplTest {
         JwtEntity entity = new JwtEntity();
         entity.setAccessExpiredAt(Instant.now().minusSeconds(60));
 
-        when(jwtRepository.findByAccessToken("expiredAccess")).thenReturn(
-            Optional.of(entity)
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("expiredAccess", "expiredRefresh")
+        ).thenReturn(Optional.of(entity));
 
-        assertThrows(IllegalStateException.class, () ->
-            service.introspectToJwt("expiredAccess")
-        );
+        assertThatThrownBy(() ->
+            service.introspectToJwt(
+                new Token("expiredAccess", "expiredRefresh")
+            )
+        ).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     @DisplayName("Revoke Token - Success")
     void revokeToken_Success() {
         JwtEntity entity = new JwtEntity();
-        when(jwtRepository.findByRefreshToken("validRefresh")).thenReturn(
-            Optional.of(entity)
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("validAccess", "validRefresh")
+        ).thenReturn(Optional.of(entity));
 
-        service.revokeToken("validRefresh");
-        verify(jwtRepository).delete(entity);
+        service.revokeToken(new Token("validAccess", "validRefresh"));
+
+        verify(jwtRepository, times(1)).delete(entity);
     }
 
     @Test
     @DisplayName("Revoke Token - Fails when Token is null")
     void revokeToken_Null_ThrowsException() {
-        assertThrows(IllegalArgumentException.class, () ->
-            service.revokeToken(null)
+        assertThatThrownBy(() -> service.revokeToken(null)).isInstanceOf(
+            IllegalArgumentException.class
         );
+
         verify(jwtRepository, never()).delete(any());
     }
 
     @Test
     @DisplayName("Revoke Token - Fails when Token not found")
     void revokeToken_NotFound_ThrowsException() {
-        when(jwtRepository.findByRefreshToken("unknownRefresh")).thenReturn(
-            Optional.empty()
-        );
-        assertThrows(IllegalArgumentException.class, () ->
-            service.revokeToken("unknownRefresh")
-        );
+        when(
+            jwtRepository.findByAccessTokenAndRefreshToken("unknownAccess", "unknownRefresh")
+        ).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+            service.revokeToken(new Token("unknownAccess", "unknownRefresh"))
+        ).isInstanceOf(IllegalArgumentException.class);
+
         verify(jwtRepository, never()).delete(any());
     }
 }

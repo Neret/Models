@@ -10,6 +10,6 @@ public interface JwtService {
     Token generateToken(UserProfile jsonRequest);
     Token refreshToken(Token token);
     JWKSet getPublic();
-    String introspectToJwt(String opaqueAccessToken);
-    void revokeToken(String refreshToken);
+    String introspectToJwt(Token token);
+    void revokeToken(Token token);
 }

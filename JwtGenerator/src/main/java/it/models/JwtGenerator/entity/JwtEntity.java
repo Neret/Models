@@ -7,7 +7,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.List;
 
 @Entity
 @Table(name = "db_token")
@@ -36,7 +35,7 @@ public class JwtEntity {
     private Instant refreshExpiredAt;
 
     @Column(name = "roles", nullable = false)
-    private List<String> roles;
+    private String roles;
 
     public long getId() {
         return id;
@@ -94,11 +93,11 @@ public class JwtEntity {
         this.refreshExpiredAt = refreshExpiredAt;
     }
 
-    public List<String> getRoles() {
+    public String getRoles() {
         return roles;
     }
 
-    public void setRoles(List<String> roles) {
+    public void setRoles(String roles) {
         this.roles = roles;
     }
 }

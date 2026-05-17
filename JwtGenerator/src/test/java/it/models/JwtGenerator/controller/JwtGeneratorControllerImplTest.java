@@ -1,9 +1,7 @@
 package it.models.JwtGenerator.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -19,32 +17,26 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(JwtGeneratorControllerImpl.class)
 @AutoConfigureMockMvc(addFilters = false)
-@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class JwtGeneratorControllerImplTest {
 
     @MockitoBean
     private JwtService jwtService;
 
-    private final MockMvc mockMvc;
-    private final ObjectMapper objectMapper;
+    @Autowired
+    private MockMvcTester mockMvc;
 
-    public JwtGeneratorControllerImplTest(
-        MockMvc mockMvc,
-        ObjectMapper objectMapper
-    ) {
-        this.mockMvc = mockMvc;
-        this.objectMapper = objectMapper;
-    }
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     @DisplayName("POST /generate - Success")
@@ -52,29 +44,31 @@ class JwtGeneratorControllerImplTest {
         Token token = new Token("opaqueAccess123", "opaqueRefresh456");
         UserProfile request = new UserProfile(1L, List.of("USER"));
 
-        when(
-            jwtService.generateToken(Mockito.any(UserProfile.class))
-        ).thenReturn(token);
+        when(jwtService.generateToken(request)).thenReturn(token);
 
-        mockMvc
-            .perform(
-                post("/api/jwt/generate")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(request))
-            )
-            .andExpect(status().isOk());
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/generate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        ).hasStatusOk();
     }
 
     @Test
-    @DisplayName("POST /generate - Bad Request on missing body")
-    void generateToken_MissingBody_BadRequest() throws Exception {
-        mockMvc
-            .perform(
-                post("/api/jwt/generate").contentType(
-                    MediaType.APPLICATION_JSON
-                )
-            )
-            .andExpect(status().isBadRequest());
+    @DisplayName(
+        "POST /generate - Bad Request on invalid fields (Validation Failure)"
+    )
+    void generateToken_InvalidFields_BadRequest() throws Exception {
+        UserProfile request = new UserProfile(null, List.of());
+
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/generate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        ).hasStatus(400);
     }
 
     @Test
@@ -83,51 +77,38 @@ class JwtGeneratorControllerImplTest {
         Token tokenRequest = new Token("OLDopaqueAccess", "OLDopaqueRefresh");
         Token tokenResponse = new Token("NEWopaqueAccess", "NEWopaqueRefresh");
 
-        when(jwtService.refreshToken(Mockito.any(Token.class))).thenReturn(
-            tokenResponse
-        );
+        when(jwtService.refreshToken(tokenRequest)).thenReturn(tokenResponse);
 
-        mockMvc
-            .perform(
-                post("/api/jwt/refresh")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(tokenRequest))
-            )
-            .andExpect(status().isOk());
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatusOk();
     }
 
     @Test
-    @DisplayName("POST /refresh - Bad Request on empty body")
-    void refreshToken_EmptyBody_BadRequest() throws Exception {
-        mockMvc
-            .perform(
-                post("/api/jwt/refresh").contentType(MediaType.APPLICATION_JSON)
-            )
-            .andExpect(status().isBadRequest());
+    @DisplayName(
+        "POST /refresh - Bad Request on blank tokens (Validation Failure)"
+    )
+    void refreshToken_BlankTokens_BadRequest() throws Exception {
+        Token tokenRequest = new Token("", "   ");
+
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatus(400);
     }
-
-    // @Test
-    // @DisplayName("POST /refresh - Service throws IllegalArgumentException")
-    // void refreshToken_InvalidToken_BadRequest() throws Exception {
-    //     Token tokenRequest = new Token(null, "OLDopaqueRefresh");
-
-    //     when(jwtService.refreshToken(Mockito.any(Token.class))).thenThrow(
-    //         new IllegalArgumentException("Invalid Token")
-    //     );
-
-    //     mockMvc
-    //         .perform(
-    //             post("/api/jwt/refresh")
-    //                 .contentType(MediaType.APPLICATION_JSON)
-    //                 .content(objectMapper.writeValueAsString(tokenRequest))
-    //         )
-    //         .andExpect(status().isBadRequest());
-    // }
 
     @Test
     @DisplayName("GET /jwks - Success")
     void jwks_Success() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
         KeyPair pair = generator.genKeyPair();
         JWK jwk = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
             .privateKey((RSAPrivateKey) pair.getPrivate())
@@ -136,53 +117,75 @@ class JwtGeneratorControllerImplTest {
 
         when(jwtService.getPublic()).thenReturn(jwkset);
 
-        mockMvc
-            .perform(
-                get("/api/jwt/jwks").contentType(MediaType.APPLICATION_JSON)
-            )
-            .andExpect(status().isOk());
+        assertThat(
+            mockMvc
+                .get()
+                .uri("/api/jwt/jwks")
+                .accept(MediaType.APPLICATION_JSON)
+        ).hasStatusOk();
     }
 
     @Test
     @DisplayName("POST /logout - Success")
     void logout_Success() throws Exception {
-        Mockito.doNothing().when(jwtService).revokeToken(Mockito.anyString());
+        Token tokenRequest = new Token("validAccessToken", "validRefreshToken");
+        Mockito.doNothing().when(jwtService).revokeToken(tokenRequest);
 
-        mockMvc
-            .perform(
-                post("/api/jwt/logout")
-                    .content("refreshToken")
-                    .contentType(MediaType.APPLICATION_JSON)
-            )
-            .andExpect(status().isOk());
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/logout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatusOk();
     }
 
     @Test
-    @DisplayName("POST /logout - Bad Request on missing param")
-    void logout_MissingParam_BadRequest() throws Exception {
-        mockMvc
-            .perform(
-                post("/api/jwt/logout").contentType(MediaType.APPLICATION_JSON)
-            )
-            .andExpect(status().isBadRequest());
+    @DisplayName(
+        "POST /logout - Bad Request on blank param (Validation Failure)"
+    )
+    void logout_BlankParam_BadRequest() throws Exception {
+        Token tokenRequest = new Token("validAccessToken", "   ");
+
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/logout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatus(400);
     }
 
     @Test
     @DisplayName("POST /introspect - Success")
     void introspect_Success() throws Exception {
-        String tokenInput = "opaqueAccess123";
+        Token tokenRequest = new Token("opaqueAccess123", "opaqueRefresh123");
         String jwtOutput = "header.payload.signature";
 
-        when(jwtService.introspectToJwt(Mockito.anyString())).thenReturn(
-            jwtOutput
-        );
+        when(jwtService.introspectToJwt(tokenRequest)).thenReturn(jwtOutput);
 
-        mockMvc
-            .perform(
-                post("/api/jwt/introspect")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(tokenInput)
-            )
-            .andExpect(status().isOk());
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/introspect")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatusOk();
+    }
+
+    @Test
+    @DisplayName(
+        "POST /introspect - Bad Request on blank param (Validation Failure)"
+    )
+    void introspect_BlankParam_BadRequest() throws Exception {
+        Token tokenRequest = new Token("", "opaqueRefresh123");
+
+        assertThat(
+            mockMvc
+                .post()
+                .uri("/api/jwt/introspect")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tokenRequest))
+        ).hasStatus(400);
     }
 }

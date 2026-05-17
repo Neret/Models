@@ -1,3 +1,9 @@
 package it.models.JwtGenerator.dto;
 
-public record Token(String accessToken, String refreshToken) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record Token(
+    @NotBlank(message = "Access token is required") String accessToken,
+
+    @NotBlank(message = "Refresh token is required") String refreshToken
+) {}

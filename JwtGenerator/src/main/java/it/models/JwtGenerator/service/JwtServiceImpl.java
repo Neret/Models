@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
@@ -55,6 +56,16 @@ public class JwtServiceImpl implements JwtService {
         String opaqueAccess = generateOpaqueToken();
         String opaqueRefresh = generateOpaqueToken();
 
+        String rolesString = userProfile
+            .roles()
+            .stream()
+            .map(role ->
+                role.toUpperCase().startsWith("ROLE_")
+                    ? role.toUpperCase()
+                    : "ROLE_" + role.toUpperCase()
+            )
+            .collect(Collectors.joining(","));
+
         JwtEntity entity = new JwtEntity();
         entity.setAccessToken(opaqueAccess);
         entity.setRefreshToken(opaqueRefresh);
@@ -62,7 +73,7 @@ public class JwtServiceImpl implements JwtService {
         entity.setEmittedAt(Instant.now());
         entity.setAccessExpiredAt(Instant.now().plus(15, ChronoUnit.MINUTES));
         entity.setRefreshExpiredAt(Instant.now().plus(7, ChronoUnit.DAYS));
-        entity.setRoles(userProfile.roles());
+        entity.setRoles(rolesString);
 
         jwtRepository.save(entity);
 
@@ -81,8 +92,10 @@ public class JwtServiceImpl implements JwtService {
             throw new IllegalArgumentException("Invalid Token");
         }
 
-        Optional<JwtEntity> optionalOldEntity =
-            jwtRepository.findByRefreshToken(token.refreshToken());
+        Optional<JwtEntity> optionalOldEntity = jwtRepository.findByAccessTokenAndRefreshToken(
+            token.accessToken(),
+            token.refreshToken()
+        );
         if (optionalOldEntity.isEmpty()) {
             throw new IllegalArgumentException("Invalid Refresh Token");
         }
@@ -119,9 +132,18 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String introspectToJwt(String opaqueAccessToken) {
-        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessToken(
-            opaqueAccessToken
+    public String introspectToJwt(Token token) {
+        if (
+            token == null ||
+            token.accessToken().isEmpty() ||
+            token.refreshToken().isEmpty()
+        ) {
+            throw new IllegalArgumentException("Token not provided");
+        }
+
+        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessTokenAndRefreshToken(
+            token.accessToken(),
+            token.refreshToken()
         );
 
         if (optionalEntity.isEmpty()) {
@@ -133,12 +155,14 @@ public class JwtServiceImpl implements JwtService {
             throw new IllegalStateException("Access Token Expired");
         }
 
+        String scopeClaims = entity.getRoles().replace(",", " ");
+
         JwtClaimsSet set = JwtClaimsSet.builder()
             .issuer("token-service")
             .issuedAt(Instant.now())
             .expiresAt(entity.getAccessExpiredAt())
             .subject(String.valueOf(entity.getUserId()))
-            .claim("scope", String.join(" ", entity.getRoles()))
+            .claim("scope", scopeClaims)
             .build();
 
         return jwtEncoder
@@ -147,20 +171,25 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public void revokeToken(String refreshToken) {
-        if (refreshToken == null || refreshToken.isEmpty()) {
+    public void revokeToken(Token token) {
+        if (
+            token == null ||
+            token.accessToken().isEmpty() ||
+            token.refreshToken().isEmpty()
+        ) {
             throw new IllegalArgumentException("Token not provided");
         }
 
-        Optional<JwtEntity> optionalToken = jwtRepository.findByRefreshToken(
-            refreshToken
+        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessTokenAndRefreshToken(
+            token.accessToken(),
+            token.refreshToken()
         );
 
-        if (optionalToken.isEmpty()) {
+        if (optionalEntity.isEmpty()) {
             throw new IllegalArgumentException("Token invalid or not found");
         }
 
-        jwtRepository.delete(optionalToken.get());
+        jwtRepository.delete(optionalEntity.get());
     }
 
     @Override
