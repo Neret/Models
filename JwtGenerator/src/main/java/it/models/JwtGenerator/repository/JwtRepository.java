@@ -7,8 +7,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface JwtRepository extends JpaRepository<JwtEntity, Long> {
-    Optional<JwtEntity> findByAccessTokenAndRefreshToken(
-        String accessToken,
-        String refreshToken
-    );
+    Optional<JwtEntity> findByRefreshToken(String refreshToken);
+    Optional<JwtEntity> findByAccessToken(String accessToken);
 }

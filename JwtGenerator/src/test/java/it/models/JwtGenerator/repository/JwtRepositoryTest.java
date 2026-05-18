@@ -10,12 +10,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 @DataJpaTest
-@AutoConfigureTestDatabase(replace = Replace.NONE)
+@Testcontainers
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class JwtRepositoryTest {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
+        "postgres:latest"
+    );
 
     @Autowired
     private TestEntityManager entityManager;
@@ -24,25 +34,50 @@ class JwtRepositoryTest {
     private JwtRepository jwtRepository;
 
     @Test
-    @DisplayName("Repository - Find by Token")
+    @DisplayName("Repository - Find by Access Token")
     void findByAccessToken_ReturnsEntity() {
         JwtEntity entity = new JwtEntity();
-        entity.setUserId(999999L);
-        entity.setAccessToken("opaque_access_124");
-        entity.setRefreshToken("opaque_refresh_124");
+        entity.setUserId(888888L);
+        entity.setAccessToken("opaque_access_555");
+        entity.setRefreshToken("opaque_refresh_555");
         entity.setEmittedAt(Instant.now());
         entity.setAccessExpiredAt(Instant.now().plusSeconds(60));
         entity.setRefreshExpiredAt(Instant.now().plusSeconds(300));
-        entity.setRoles("ROLE_ADMIN");
+        entity.setRoles("ROLE_USER");
 
         entityManager.persistAndFlush(entity);
 
-        Optional<JwtEntity> found = jwtRepository.findByAccessTokenAndRefreshToken(
-            "opaque_access_124",
-            "opaque_refresh_124"
+        Optional<JwtEntity> found = jwtRepository.findByAccessToken(
+            "opaque_access_555"
         );
 
         assertThat(found).isPresent();
-        assertThat(found.get().getUserId()).isEqualTo(999999L);
+        assertThat(found.get().getRefreshToken()).isEqualTo(
+            "opaque_refresh_555"
+        );
+        assertThat(found.get().getUserId()).isEqualTo(888888L);
+    }
+
+    @Test
+    @DisplayName("Repository - Find by Refresh Token")
+    void findByRefreshToken_ReturnsEntity() {
+        JwtEntity entity = new JwtEntity();
+        entity.setUserId(888888L);
+        entity.setAccessToken("opaque_access_555");
+        entity.setRefreshToken("opaque_refresh_555");
+        entity.setEmittedAt(Instant.now());
+        entity.setAccessExpiredAt(Instant.now().plusSeconds(60));
+        entity.setRefreshExpiredAt(Instant.now().plusSeconds(300));
+        entity.setRoles("ROLE_USER");
+
+        entityManager.persistAndFlush(entity);
+
+        Optional<JwtEntity> found = jwtRepository.findByRefreshToken(
+            "opaque_refresh_555"
+        );
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getAccessToken()).isEqualTo("opaque_access_555");
+        assertThat(found.get().getUserId()).isEqualTo(888888L);
     }
 }

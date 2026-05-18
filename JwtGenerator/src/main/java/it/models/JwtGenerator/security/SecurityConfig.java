@@ -15,24 +15,19 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-            .csrf(csrf ->
-                csrf
-                    .disable()
-                    .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                            SessionCreationPolicy.STATELESS
-                        )
-                    )
-                    .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(Customizer.withDefaults())
-                    )
-                    .authorizeHttpRequests(auth ->
-                        auth
-                            .requestMatchers("/api/jwt/**")
-                            .permitAll()
-                            .anyRequest()
-                            .authenticated()
-                    )
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .oauth2ResourceServer(oauth2 ->
+                oauth2.jwt(Customizer.withDefaults())
+            )
+            .authorizeHttpRequests(auth ->
+                auth
+                    .requestMatchers("/api/jwt/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated()
             )
             .build();
     }

@@ -1,5 +1,7 @@
 package it.models.JwtGenerator.controller;
 
+import it.models.JwtGenerator.dto.AccessToken;
+import it.models.JwtGenerator.dto.RefreshToken;
 import it.models.JwtGenerator.dto.Token;
 import it.models.JwtGenerator.dto.UserProfile;
 import it.models.JwtGenerator.service.JwtService;
@@ -33,8 +35,10 @@ public class JwtGeneratorControllerImpl implements JwtGeneratorController {
 
     @PostMapping("/refresh")
     @Override
-    public ResponseEntity<Token> refreshToken(@RequestBody Token token) {
-        return ResponseEntity.ok(jwtService.refreshToken(token));
+    public ResponseEntity<Token> refreshToken(
+        @RequestBody RefreshToken refreshToken
+    ) {
+        return ResponseEntity.ok(jwtService.refreshToken(refreshToken));
     }
 
     @GetMapping("/jwks")
@@ -45,14 +49,16 @@ public class JwtGeneratorControllerImpl implements JwtGeneratorController {
 
     @PostMapping("/logout")
     @Override
-    public ResponseEntity<Void> logout(@RequestBody Token token) {
-        jwtService.revokeToken(token);
+    public ResponseEntity<Void> logout(@RequestBody RefreshToken refreshToken) {
+        jwtService.revokeToken(refreshToken);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/introspect")
     @Override
-    public ResponseEntity<String> introspect(@RequestBody Token token) {
-        return ResponseEntity.ok(jwtService.introspectToJwt(token));
+    public ResponseEntity<String> introspect(
+        @RequestBody AccessToken accessToken
+    ) {
+        return ResponseEntity.ok(jwtService.introspectToJwt(accessToken));
     }
 }

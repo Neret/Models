@@ -1,6 +1,8 @@
 package it.models.JwtGenerator.service;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import it.models.JwtGenerator.dto.AccessToken;
+import it.models.JwtGenerator.dto.RefreshToken;
 import it.models.JwtGenerator.dto.Token;
 import it.models.JwtGenerator.dto.UserProfile;
 import it.models.JwtGenerator.entity.JwtEntity;
@@ -11,7 +13,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
@@ -45,6 +46,24 @@ public class JwtServiceImpl implements JwtService {
             .encodeToString(randomBytes);
     }
 
+    private String generateJwt(long userId, String roles) {
+        if (roles == null || roles.isBlank()) {
+            throw new IllegalArgumentException("Roles cannot be null or empty");
+        }
+
+        JwtClaimsSet set = JwtClaimsSet.builder()
+            .issuer("token-service")
+            .issuedAt(Instant.now())
+            .expiresAt(Instant.now().plus(15, ChronoUnit.MINUTES))
+            .subject(String.valueOf(userId))
+            .claim("scope", roles)
+            .build();
+
+        return jwtEncoder
+            .encode(JwtEncoderParameters.from(set))
+            .getTokenValue();
+    }
+
     @Override
     public Token generateToken(UserProfile userProfile) {
         if (userProfile == null || userProfile.roles() == null) {
@@ -55,16 +74,21 @@ public class JwtServiceImpl implements JwtService {
 
         String opaqueAccess = generateOpaqueToken();
         String opaqueRefresh = generateOpaqueToken();
+        StringBuilder stringBuilder = new StringBuilder();
 
-        String rolesString = userProfile
-            .roles()
-            .stream()
-            .map(role ->
-                role.toUpperCase().startsWith("ROLE_")
-                    ? role.toUpperCase()
-                    : "ROLE_" + role.toUpperCase()
-            )
-            .collect(Collectors.joining(","));
+        for (String role : userProfile.roles()) {
+            String tmp;
+            if (role.startsWith("ROLE_")) tmp = "ROLE_" + role;
+            else tmp = role;
+
+            if (stringBuilder.length() > 0) {
+                stringBuilder.append(" ");
+            }
+            stringBuilder.append(tmp);
+        }
+
+        String rolesString = stringBuilder.toString();
+        String.join(" ", userProfile.roles());
 
         JwtEntity entity = new JwtEntity();
         entity.setAccessToken(opaqueAccess);
@@ -81,37 +105,28 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public Token refreshToken(Token token) {
+    public Token refreshToken(RefreshToken refreshToken) {
         if (
-            token == null ||
-            token.refreshToken() == null ||
-            token.refreshToken().isEmpty() ||
-            token.accessToken() == null ||
-            token.accessToken().isEmpty()
+            refreshToken == null ||
+            refreshToken.refreshToken() == null ||
+            refreshToken.refreshToken().isBlank()
         ) {
             throw new IllegalArgumentException("Invalid Token");
         }
 
-        Optional<JwtEntity> optionalOldEntity = jwtRepository.findByAccessTokenAndRefreshToken(
-            token.accessToken(),
-            token.refreshToken()
-        );
+        Optional<JwtEntity> optionalOldEntity =
+            jwtRepository.findByRefreshToken(refreshToken.refreshToken());
+
         if (optionalOldEntity.isEmpty()) {
-            throw new IllegalArgumentException("Invalid Refresh Token");
+            throw new IllegalStateException("Invalid Refresh Token");
         }
 
         JwtEntity oldEntity = optionalOldEntity.get();
+
         if (oldEntity.getRefreshExpiredAt().isBefore(Instant.now())) {
             jwtRepository.delete(oldEntity);
             throw new IllegalStateException(
                 "Refresh Token Expired. Please login again."
-            );
-        }
-
-        if (!oldEntity.getAccessToken().equals(token.accessToken())) {
-            jwtRepository.delete(oldEntity);
-            throw new IllegalArgumentException(
-                "Token Mismatch: Possible token theft"
             );
         }
 
@@ -132,22 +147,21 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String introspectToJwt(Token token) {
+    public String introspectToJwt(AccessToken accessToken) {
         if (
-            token == null ||
-            token.accessToken().isEmpty() ||
-            token.refreshToken().isEmpty()
+            accessToken == null ||
+            accessToken.accessToken() == null ||
+            accessToken.accessToken().isBlank()
         ) {
             throw new IllegalArgumentException("Token not provided");
         }
 
-        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessTokenAndRefreshToken(
-            token.accessToken(),
-            token.refreshToken()
+        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessToken(
+            accessToken.accessToken()
         );
 
         if (optionalEntity.isEmpty()) {
-            throw new IllegalArgumentException("Token not found or invalid");
+            throw new IllegalStateException("Token not found or invalid");
         }
 
         JwtEntity entity = optionalEntity.get();
@@ -155,38 +169,25 @@ public class JwtServiceImpl implements JwtService {
             throw new IllegalStateException("Access Token Expired");
         }
 
-        String scopeClaims = entity.getRoles().replace(",", " ");
-
-        JwtClaimsSet set = JwtClaimsSet.builder()
-            .issuer("token-service")
-            .issuedAt(Instant.now())
-            .expiresAt(entity.getAccessExpiredAt())
-            .subject(String.valueOf(entity.getUserId()))
-            .claim("scope", scopeClaims)
-            .build();
-
-        return jwtEncoder
-            .encode(JwtEncoderParameters.from(set))
-            .getTokenValue();
+        return this.generateJwt(entity.getUserId(), entity.getRoles());
     }
 
     @Override
-    public void revokeToken(Token token) {
+    public void revokeToken(RefreshToken refreshToken) {
         if (
-            token == null ||
-            token.accessToken().isEmpty() ||
-            token.refreshToken().isEmpty()
+            refreshToken == null ||
+            refreshToken.refreshToken() == null ||
+            refreshToken.refreshToken().isBlank()
         ) {
             throw new IllegalArgumentException("Token not provided");
         }
 
-        Optional<JwtEntity> optionalEntity = jwtRepository.findByAccessTokenAndRefreshToken(
-            token.accessToken(),
-            token.refreshToken()
+        Optional<JwtEntity> optionalEntity = jwtRepository.findByRefreshToken(
+            refreshToken.refreshToken()
         );
 
         if (optionalEntity.isEmpty()) {
-            throw new IllegalArgumentException("Token invalid or not found");
+            throw new IllegalStateException("Token invalid or not found");
         }
 
         jwtRepository.delete(optionalEntity.get());
