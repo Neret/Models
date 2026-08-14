@@ -1,0 +1,14 @@
+
+target/
+.mvn/
+*.class
+
+src/test/
+
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
